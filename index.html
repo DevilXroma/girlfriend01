@@ -8,32 +8,41 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=0105" />
+  <link rel="stylesheet" href="style.css?v=0200" />
 </head>
 <body>
   <div class="glow glow-a"></div>
   <div class="glow glow-b"></div>
   <div class="grid-bg"></div>
 
-  <main class="app">
-    <header class="hero">
-      <div class="hero-badges"><span>version 0.1</span><span>constellation notes</span></div>
-      <h1>Карта мелочей</h1>
-      <p>Спокойная карта разделов и вложенных заметок. Сначала выбираешь крупный раздел, потом работаешь с его точками.</p>
+  <main class="app-screen">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">✦</div>
+        <div>
+          <p>version 0.2</p>
+          <h1>Карта мелочей</h1>
+        </div>
+      </div>
+      <label class="search-box">
+        <span>Поиск</span>
+        <input id="searchInput" type="search" placeholder="подарок, отец, горы, кофе..." autocomplete="off" />
+      </label>
+      <div class="top-actions">
+        <button id="homeButton" type="button">главная</button>
+        <button id="addSectionButton" type="button">+ раздел</button>
+      </div>
     </header>
 
-    <section class="stage">
+    <section class="workspace">
       <section class="map-panel">
-        <div class="panel-head">
+        <div class="map-head">
           <div>
             <p class="overline" id="modeLabel">главная карта</p>
             <h2 id="mapTitle">Разделы</h2>
-            <p id="mapHint">Крупные узлы показывают основные разделы. Нажми на раздел, чтобы открыть внутреннюю карту.</p>
+            <p id="mapHint">Выбери раздел. Внутри будут записи, которые можно дополнять и редактировать постепенно.</p>
           </div>
-          <div class="actions">
-            <button id="backButton" type="button">назад</button>
-            <button id="resetButton" type="button">сброс</button>
-          </div>
+          <div class="map-stats" id="mapStats"></div>
         </div>
         <div class="canvas-box" id="canvasBox">
           <canvas id="mapCanvas"></canvas>
@@ -41,47 +50,43 @@
         </div>
       </section>
 
-      <aside class="details-panel">
-        <p class="overline" id="detailsOverline">ничего не выбрано</p>
-        <h2 id="detailsTitle">Выбери раздел</h2>
-        <p id="detailsText">На главной карте видны только большие разделы. Внутри раздела появятся конкретные заметки и связи.</p>
-        <div class="detail-stats" id="detailStats"></div>
-        <div class="chips" id="detailChips"></div>
+      <aside class="side-panel" id="sidePanel">
+        <div class="sheet-handle"></div>
+        <section class="details-block">
+          <div class="details-top">
+            <p class="overline" id="detailsOverline">ничего не выбрано</p>
+            <div class="details-actions">
+              <button id="addItemButton" type="button">+ запись</button>
+              <button id="editButton" type="button">править</button>
+            </div>
+          </div>
+          <h2 id="detailsTitle">Выбери раздел</h2>
+          <p id="detailsText">На главной карте видны крупные разделы. Нажми на раздел, чтобы открыть его точки.</p>
+          <div class="detail-stats" id="detailStats"></div>
+          <div class="inside-list" id="insideList"></div>
+        </section>
+
+        <section class="editor-block" id="editorBlock">
+          <div class="editor-head">
+            <div>
+              <p class="overline" id="editorMode">новая запись</p>
+              <h2 id="editorTitle">Добавить</h2>
+            </div>
+            <button id="closeEditorButton" type="button">×</button>
+          </div>
+          <form id="editForm" class="form">
+            <label id="sectionPickLabel">Раздел<select id="sectionSelect"></select></label>
+            <label>Название<input id="titleInput" type="text" placeholder="например: Папа / Серёжки / Гестхаус" required /></label>
+            <label>Комментарий<textarea id="commentInput" rows="5" placeholder="Что важно помнить. Можно оставить как черновик и дописать позже."></textarea></label>
+            <label id="tagsLabel">Теги<input id="tagsInput" type="text" placeholder="через запятую: уточнить, подарок, родные" /></label>
+            <button type="submit" id="saveButton">сохранить</button>
+          </form>
+        </section>
       </aside>
-    </section>
-
-    <section class="tools-row">
-      <label class="search-box"><span>Поиск</span><input id="searchInput" type="search" placeholder="подарок, поездка, дата, имя..." autocomplete="off" /></label>
-      <div class="stats-row" id="statsRow"></div>
-    </section>
-
-    <section class="content-grid">
-      <section class="editor-card">
-        <div class="card-head"><p class="overline">черновик</p><h2>Добавить запись</h2><p>Запись появится в карте и сохранится в этом браузере. Потом её можно экспортировать.</p></div>
-        <form id="addForm" class="form">
-          <label>Раздел<select id="sectionSelect"></select></label>
-          <label id="newSectionLabel">Новый раздел<input id="newSectionInput" type="text" placeholder="например: Еда" /></label>
-          <label>Название<input id="itemTitle" type="text" placeholder="например: Дилижан / Цветы / Анна" required /></label>
-          <label>Комментарий<textarea id="itemText" rows="4" placeholder="Что важно помнить"></textarea></label>
-          <label>Теги<input id="itemTags" type="text" placeholder="через запятую: уют, подарок, горы" /></label>
-          <button type="submit">добавить</button>
-        </form>
-      </section>
-
-      <section class="notes-area">
-        <div class="card-head"><p class="overline">записи</p><h2 id="notesTitle">Все записи</h2></div>
-        <div class="notes-list" id="notesList"></div>
-      </section>
-
-      <section class="export-card">
-        <div class="card-head"><p class="overline">сохранение</p><h2>Экспорт</h2><p>Когда набросаешь данные, скопируй JSON и пришли сюда — я закреплю это в GitHub.</p></div>
-        <button id="copyDataButton" type="button">скопировать данные</button>
-        <textarea id="exportBox" rows="8" readonly placeholder="Тут появятся данные"></textarea>
-      </section>
     </section>
   </main>
 
-  <script src="data.js?v=0105"></script>
-  <script src="script.js?v=0105"></script>
+  <script src="data.js?v=0200"></script>
+  <script src="script.js?v=0200"></script>
 </body>
 </html>
