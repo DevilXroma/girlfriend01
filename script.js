@@ -26,7 +26,7 @@ const notesList = document.querySelector('#notesList');
 const copyDataButton = document.querySelector('#copyDataButton');
 const exportBox = document.querySelector('#exportBox');
 
-const STORAGE_KEY = 'memory-map-v01';
+const STORAGE_KEY = 'memory-map-v02';
 let sections = [];
 let items = [];
 let nodes = [];
@@ -35,7 +35,7 @@ let width = 0;
 let height = 0;
 let dpr = 1;
 let dragged = null;
-const state = { view: 'home', activeSectionId: null, selectedId: null, hoveredId: null, query: '' };
+const state = { view: 'home', activeSectionId: null, selectedId: null, hoveredId: null, query: '', editingId: null };
 
 function clone(value) { return JSON.parse(JSON.stringify(value)); }
 function normalize(value) { return String(value || '').toLowerCase().trim(); }
@@ -52,17 +52,13 @@ function loadData() {
       sections = data.sections || clone(DEFAULT_SECTIONS);
       items = data.items || clone(DEFAULT_ITEMS);
       return;
-    } catch (error) {
-      console.warn(error);
-    }
+    } catch (error) { console.warn(error); }
   }
   sections = clone(DEFAULT_SECTIONS);
   items = clone(DEFAULT_ITEMS);
 }
 
-function saveData() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ sections, items }));
-}
+function saveData() { localStorage.setItem(STORAGE_KEY, JSON.stringify({ sections, items })); }
 
 function resize() {
   const rect = canvasBox.getBoundingClientRect();
@@ -77,87 +73,34 @@ function resize() {
 
 function buildHomeGraph() {
   const count = sections.length || 1;
-  const rx = Math.min(width * 0.34, 410);
-  const ry = Math.min(height * 0.30, 260);
+  const rx = Math.min(width * 0.34, 430);
+  const ry = Math.min(height * 0.30, 280);
   nodes = sections.map((section, index) => {
     const angle = -Math.PI / 2 + (index / count) * Math.PI * 2;
     const x = Math.cos(angle) * rx;
     const y = Math.sin(angle) * ry;
-    return {
-      id: section.id,
-      type: 'section',
-      title: section.title,
-      comment: section.description,
-      color: section.color,
-      icon: section.icon,
-      x, y,
-      homeX: x,
-      homeY: y,
-      vx: 0,
-      vy: 0,
-      r: 38,
-      sectionId: section.id,
-      tags: []
-    };
+    return { id: section.id, type: 'section', title: section.title, comment: section.description, color: section.color, icon: section.icon, x, y, homeX: x, homeY: y, vx: 0, vy: 0, r: 38, sectionId: section.id, tags: [] };
   });
-
   links = [];
-  for (let i = 0; i < nodes.length; i += 1) {
-    links.push({ a: nodes[i], b: nodes[(i + 1) % nodes.length], type: 'soft', weight: 1 });
-  }
+  for (let i = 0; i < nodes.length; i += 1) links.push({ a: nodes[i], b: nodes[(i + 1) % nodes.length], type: 'soft', weight: 1 });
 }
 
 function buildSectionGraph(sectionId) {
   const section = getSection(sectionId);
   const sectionItems = items.filter((item) => item.sectionId === sectionId);
-  const center = {
-    id: section.id,
-    type: 'section-center',
-    title: section.title,
-    comment: section.description,
-    color: section.color,
-    icon: section.icon,
-    x: 0,
-    y: 0,
-    homeX: 0,
-    homeY: 0,
-    vx: 0,
-    vy: 0,
-    r: 40,
-    sectionId,
-    tags: []
-  };
-
+  const center = { id: section.id, type: 'section-center', title: section.title, comment: section.description, color: section.color, icon: section.icon, x: 0, y: 0, homeX: 0, homeY: 0, vx: 0, vy: 0, r: 42, sectionId, tags: [] };
   nodes = [center];
   const count = Math.max(1, sectionItems.length);
-  const rx = Math.min(width * 0.38, 500);
-  const ry = Math.min(height * 0.33, 310);
-
+  const rx = Math.min(width * 0.40, 540);
+  const ry = Math.min(height * 0.35, 330);
   sectionItems.forEach((item, index) => {
     const angle = -Math.PI / 2 + (index / count) * Math.PI * 2;
     const wobble = index % 2 ? 0.88 : 1.08;
     const x = Math.cos(angle) * rx * wobble;
     const y = Math.sin(angle) * ry * wobble;
-    nodes.push({
-      id: item.id,
-      type: 'item',
-      title: item.title,
-      comment: item.comment,
-      color: section.color,
-      icon: '',
-      x, y,
-      homeX: x,
-      homeY: y,
-      vx: 0,
-      vy: 0,
-      r: 23,
-      sectionId,
-      tags: item.tags || []
-    });
+    nodes.push({ id: item.id, type: 'item', title: item.title, comment: item.comment, color: section.color, icon: '', x, y, homeX: x, homeY: y, vx: 0, vy: 0, r: 23, sectionId, tags: item.tags || [] });
   });
-
   links = nodes.filter((node) => node.type === 'item').map((node) => ({ a: center, b: node, type: 'parent', weight: 2 }));
-
   for (let i = 1; i < nodes.length; i += 1) {
     for (let j = i + 1; j < nodes.length; j += 1) {
       const shared = nodes[i].tags.filter((tag) => nodes[j].tags.includes(tag));
@@ -182,7 +125,7 @@ function updateMapText() {
     const section = getSection(state.activeSectionId);
     modeLabel.textContent = 'раздел';
     mapTitle.textContent = section.title;
-    mapHint.textContent = 'Внутри раздела каждая точка — универсальная запись: название, комментарий и теги.';
+    mapHint.textContent = 'Внутри раздела каждая точка — запись-блокнот: название, комментарий и теги. Инфу можно дописывать позже.';
     backButton.classList.remove('hidden');
   }
 }
@@ -200,7 +143,6 @@ function getRelatedIds(node) {
 function physics() {
   const focus = nodes.find((node) => node.id === focusId());
   const related = getRelatedIds(focus);
-
   nodes.forEach((node) => {
     if (node === dragged) return;
     node.vx += (node.homeX - node.x) * 0.006;
@@ -210,7 +152,6 @@ function physics() {
       node.vy += (node.y > 0 ? 0.007 : -0.007);
     }
   });
-
   links.forEach((link) => {
     const dx = link.b.x - link.a.x;
     const dy = link.b.y - link.a.y;
@@ -222,31 +163,24 @@ function physics() {
     if (link.a !== dragged) { link.a.vx += fx; link.a.vy += fy; }
     if (link.b !== dragged) { link.b.vx -= fx; link.b.vy -= fy; }
   });
-
   for (let i = 0; i < nodes.length; i += 1) {
     for (let j = i + 1; j < nodes.length; j += 1) {
-      const a = nodes[i];
-      const b = nodes[j];
-      const dx = b.x - a.x;
-      const dy = b.y - a.y;
+      const a = nodes[i]; const b = nodes[j];
+      const dx = b.x - a.x; const dy = b.y - a.y;
       const dist = Math.hypot(dx, dy) || 1;
-      const min = a.r + b.r + (a.type.includes('section') || b.type.includes('section') ? 72 : 46);
+      const min = a.r + b.r + (a.type.includes('section') || b.type.includes('section') ? 72 : 50);
       if (dist < min) {
         const push = (min - dist) * 0.012;
-        const fx = dx / dist * push;
-        const fy = dy / dist * push;
+        const fx = dx / dist * push; const fy = dy / dist * push;
         if (a !== dragged) { a.vx -= fx; a.vy -= fy; }
         if (b !== dragged) { b.vx += fx; b.vy += fy; }
       }
     }
   }
-
   nodes.forEach((node) => {
     if (node === dragged) return;
-    node.vx *= 0.86;
-    node.vy *= 0.86;
-    node.x += node.vx;
-    node.y += node.vy;
+    node.vx *= 0.86; node.vy *= 0.86;
+    node.x += node.vx; node.y += node.vy;
     node.x = Math.max(-width / 2 + 70, Math.min(width / 2 - 70, node.x));
     node.y = Math.max(-height / 2 + 70, Math.min(height / 2 - 70, node.y));
   });
@@ -256,10 +190,8 @@ function draw() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.setTransform(dpr, 0, 0, dpr, width / 2, height / 2);
-
   const focus = nodes.find((node) => node.id === focusId());
   const related = getRelatedIds(focus);
-
   links.forEach((link) => {
     const active = !focus || (related.has(link.a.id) && related.has(link.b.id));
     ctx.save();
@@ -274,7 +206,6 @@ function draw() {
     ctx.stroke();
     ctx.restore();
   });
-
   nodes.forEach((node) => {
     const active = !focus || related.has(node.id);
     const selected = focus && focus.id === node.id;
@@ -287,27 +218,22 @@ function draw() {
     ctx.beginPath();
     ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
     ctx.fill();
-
     ctx.shadowBlur = 0;
     ctx.fillStyle = '#fff';
     ctx.font = `${node.type === 'item' ? 800 : 900} ${node.type === 'item' ? 13 : 16}px Inter, sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(node.title, node.x, node.y - radius - 16);
-
     if (node.icon) {
       ctx.fillStyle = 'rgba(0,0,0,.45)';
       ctx.font = '900 20px Inter, sans-serif';
       ctx.fillText(node.icon, node.x, node.y + 1);
     }
-
     if (node.type !== 'item') {
       const count = items.filter((item) => item.sectionId === node.sectionId).length;
       ctx.fillStyle = 'rgba(255,255,255,.72)';
       ctx.font = '700 11px Inter, sans-serif';
       ctx.fillText(`${count} записей`, node.x, node.y + radius + 18);
     }
-
     if (selected) {
       ctx.strokeStyle = 'rgba(255,255,255,.85)';
       ctx.lineWidth = 1.6;
@@ -317,7 +243,6 @@ function draw() {
     }
     ctx.restore();
   });
-
   physics();
   requestAnimationFrame(draw);
 }
@@ -327,75 +252,37 @@ function canvasPoint(event) {
   const source = event.touches ? event.touches[0] : event;
   return { x: source.clientX - rect.left - rect.width / 2, y: source.clientY - rect.top - rect.height / 2 };
 }
-
-function hitNode(point) {
-  return [...nodes].reverse().find((node) => Math.hypot(node.x - point.x, node.y - point.y) < node.r + 28) || null;
-}
+function hitNode(point) { return [...nodes].reverse().find((node) => Math.hypot(node.x - point.x, node.y - point.y) < node.r + 28) || null; }
 
 function selectNode(node) {
-  if (!node) {
-    state.selectedId = null;
-    renderDetails(null);
-    renderNotes();
-    return;
-  }
-
+  if (!node) { state.selectedId = null; renderDetails(null); renderNotes(); return; }
   if (state.view === 'home' && node.type === 'section') {
-    state.view = 'section';
-    state.activeSectionId = node.sectionId;
-    state.selectedId = node.sectionId;
-    state.hoveredId = null;
-    rebuildGraph();
-    renderDetails(nodes.find((item) => item.id === node.sectionId));
-    renderNotes();
-    return;
+    state.view = 'section'; state.activeSectionId = node.sectionId; state.selectedId = node.sectionId; state.hoveredId = null;
+    rebuildGraph(); renderDetails(nodes.find((item) => item.id === node.sectionId)); renderNotes(); fillSectionSelect(); return;
   }
-
   state.selectedId = state.selectedId === node.id ? null : node.id;
-  renderDetails(nodes.find((item) => item.id === state.selectedId));
-  renderNotes();
+  renderDetails(nodes.find((item) => item.id === state.selectedId)); renderNotes();
 }
 
 function renderDetails(node) {
   if (!node) {
     detailsOverline.textContent = 'ничего не выбрано';
     detailsTitle.textContent = state.view === 'home' ? 'Выбери раздел' : 'Выбери запись';
-    detailsText.textContent = state.view === 'home'
-      ? 'На главной карте видны только большие разделы. Внутри раздела появятся конкретные заметки и связи.'
-      : 'Каждая точка — это универсальная запись: название, комментарий и теги.';
-    detailStats.textContent = '';
-    detailChips.textContent = '';
-    return;
+    detailsText.textContent = state.view === 'home' ? 'На главной карте видны только большие разделы. Внутри раздела появятся конкретные заметки и связи.' : 'Каждая точка — универсальная запись: название, комментарий и теги. Неполная информация — это нормально.';
+    detailStats.textContent = ''; detailChips.textContent = ''; return;
   }
-
   detailsOverline.textContent = node.type === 'item' ? 'запись' : 'раздел';
   detailsTitle.textContent = node.title;
   detailsText.textContent = node.comment || 'Пока без комментария.';
-  detailStats.textContent = '';
-  detailChips.textContent = '';
-
+  detailStats.textContent = ''; detailChips.textContent = '';
   const sectionItems = items.filter((item) => item.sectionId === node.sectionId);
-  const values = node.type === 'item'
-    ? [[node.tags.length, 'тегов'], [getRelatedIds(node).size - 1, 'связей']]
-    : [[sectionItems.length, 'записей'], [sections.length, 'разделов']];
-
+  const values = node.type === 'item' ? [[node.tags.length, 'тегов'], [getRelatedIds(node).size - 1, 'связей']] : [[sectionItems.length, 'записей'], [sections.length, 'разделов']];
   values.forEach(([num, label]) => {
-    const box = document.createElement('div');
-    const strong = document.createElement('strong');
-    const span = document.createElement('span');
-    strong.textContent = num;
-    span.textContent = label;
-    box.append(strong, span);
-    detailStats.appendChild(box);
+    const box = document.createElement('div'); const strong = document.createElement('strong'); const span = document.createElement('span');
+    strong.textContent = num; span.textContent = label; box.append(strong, span); detailStats.appendChild(box);
   });
-
   const chips = node.type === 'item' ? node.tags.map((tag) => `#${tag}`) : sectionItems.map((item) => item.title);
-  chips.slice(0, 12).forEach((label) => {
-    const chip = document.createElement('button');
-    chip.type = 'button';
-    chip.textContent = label;
-    detailChips.appendChild(chip);
-  });
+  chips.slice(0, 14).forEach((label) => { const chip = document.createElement('button'); chip.type = 'button'; chip.textContent = label; detailChips.appendChild(chip); });
 }
 
 function filteredItems() {
@@ -413,14 +300,29 @@ function filteredItems() {
 function renderStats(list) {
   statsRow.textContent = '';
   [[sections.length, 'разделов'], [items.length, 'записей'], [links.length, 'связей'], [list.length, 'показано']].forEach(([num, label]) => {
-    const box = document.createElement('div');
-    const strong = document.createElement('strong');
-    const span = document.createElement('span');
-    strong.textContent = num;
-    span.textContent = label;
-    box.append(strong, span);
-    statsRow.appendChild(box);
+    const box = document.createElement('div'); const strong = document.createElement('strong'); const span = document.createElement('span');
+    strong.textContent = num; span.textContent = label; box.append(strong, span); statsRow.appendChild(box);
   });
+}
+
+function beginEdit(itemId) {
+  const item = getItem(itemId);
+  if (!item) return;
+  state.editingId = item.id;
+  sectionSelect.value = item.sectionId;
+  newSectionLabel.classList.remove('visible');
+  itemTitle.value = item.title;
+  itemText.value = item.comment || '';
+  itemTags.value = (item.tags || []).join(', ');
+  addForm.querySelector('button[type="submit"]').textContent = 'сохранить правки';
+  document.querySelector('.editor-card').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function cancelEdit() {
+  state.editingId = null;
+  addForm.reset();
+  addForm.querySelector('button[type="submit"]').textContent = 'добавить';
+  fillSectionSelect();
 }
 
 function renderNotes() {
@@ -428,168 +330,71 @@ function renderNotes() {
   renderStats(list);
   notesTitle.textContent = state.view === 'home' ? 'Все записи' : `Записи: ${getSection(state.activeSectionId)?.title}`;
   notesList.textContent = '';
-
   if (!list.length) {
-    const empty = document.createElement('div');
-    empty.className = 'empty';
-    empty.textContent = 'Пока ничего нет. Можно добавить запись через форму.';
-    notesList.appendChild(empty);
-    return;
+    const empty = document.createElement('div'); empty.className = 'empty'; empty.textContent = 'Пока ничего нет. Можно добавить запись через форму.'; notesList.appendChild(empty); return;
   }
-
   list.forEach((item) => {
     const section = getSection(item.sectionId);
-    const card = document.createElement('article');
-    card.className = 'note';
-    const top = document.createElement('div');
-    top.className = 'note-top';
-    const sec = document.createElement('span');
-    sec.textContent = section?.title || 'Раздел';
-    const tagPreview = document.createElement('small');
-    tagPreview.textContent = item.tags.slice(0, 2).join(', ') || 'без тегов';
+    const card = document.createElement('article'); card.className = 'note';
+    const top = document.createElement('div'); top.className = 'note-top';
+    const sec = document.createElement('span'); sec.textContent = section?.title || 'Раздел';
+    const tagPreview = document.createElement('small'); tagPreview.textContent = item.tags.slice(0, 2).join(', ') || 'без тегов';
     top.append(sec, tagPreview);
-    const title = document.createElement('h3');
-    title.textContent = item.title;
-    const text = document.createElement('p');
-    text.textContent = item.comment || 'Без комментария.';
-    const tagBox = document.createElement('div');
-    tagBox.className = 'note-tags';
-    item.tags.forEach((tag) => {
-      const chip = document.createElement('button');
-      chip.type = 'button';
-      chip.textContent = `#${tag}`;
-      tagBox.appendChild(chip);
-    });
+    const title = document.createElement('h3'); title.textContent = item.title;
+    const text = document.createElement('p'); text.textContent = item.comment || 'Без комментария.';
+    const tagBox = document.createElement('div'); tagBox.className = 'note-tags';
+    item.tags.forEach((tag) => { const chip = document.createElement('button'); chip.type = 'button'; chip.textContent = `#${tag}`; tagBox.appendChild(chip); });
+    const edit = document.createElement('button'); edit.className = 'edit-note'; edit.type = 'button'; edit.textContent = 'редактировать';
+    edit.addEventListener('click', (event) => { event.stopPropagation(); beginEdit(item.id); });
     card.addEventListener('click', () => {
-      if (state.view === 'home') {
-        state.view = 'section';
-        state.activeSectionId = item.sectionId;
-        rebuildGraph();
-      }
-      state.selectedId = item.id;
-      renderDetails(nodes.find((node) => node.id === item.id));
-      renderNotes();
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      if (state.view === 'home') { state.view = 'section'; state.activeSectionId = item.sectionId; rebuildGraph(); fillSectionSelect(); }
+      state.selectedId = item.id; renderDetails(nodes.find((node) => node.id === item.id)); renderNotes(); window.scrollTo({ top: 0, behavior: 'smooth' });
     });
-    card.append(top, title, text, tagBox);
+    card.append(top, title, text, tagBox, edit);
     notesList.appendChild(card);
   });
 }
 
 function fillSectionSelect() {
   sectionSelect.textContent = '';
-  sections.forEach((section) => {
-    const option = document.createElement('option');
-    option.value = section.id;
-    option.textContent = section.title;
-    sectionSelect.appendChild(option);
-  });
-  const add = document.createElement('option');
-  add.value = '__new';
-  add.textContent = '+ новый раздел';
-  sectionSelect.appendChild(add);
-  if (state.activeSectionId) sectionSelect.value = state.activeSectionId;
+  sections.forEach((section) => { const option = document.createElement('option'); option.value = section.id; option.textContent = section.title; sectionSelect.appendChild(option); });
+  const add = document.createElement('option'); add.value = '__new'; add.textContent = '+ новый раздел'; sectionSelect.appendChild(add);
+  if (state.activeSectionId && !state.editingId) sectionSelect.value = state.activeSectionId;
   newSectionLabel.classList.toggle('visible', sectionSelect.value === '__new');
 }
 
-function refreshAll() {
-  rebuildGraph();
-  fillSectionSelect();
-  renderDetails(nodes.find((node) => node.id === state.selectedId));
-  renderNotes();
-  exportBox.value = '';
-}
+function refreshAll() { rebuildGraph(); fillSectionSelect(); renderDetails(nodes.find((node) => node.id === state.selectedId)); renderNotes(); exportBox.value = ''; }
 
-canvas.addEventListener('mousemove', (event) => {
-  const node = hitNode(canvasPoint(event));
-  state.hoveredId = node?.id || null;
-  renderDetails(node || nodes.find((item) => item.id === state.selectedId));
-  canvas.style.cursor = node ? 'pointer' : 'default';
-});
-canvas.addEventListener('mouseleave', () => {
-  state.hoveredId = null;
-  dragged = null;
-  renderDetails(nodes.find((node) => node.id === state.selectedId));
-});
+canvas.addEventListener('mousemove', (event) => { const node = hitNode(canvasPoint(event)); state.hoveredId = node?.id || null; renderDetails(node || nodes.find((item) => item.id === state.selectedId)); canvas.style.cursor = node ? 'pointer' : 'default'; });
+canvas.addEventListener('mouseleave', () => { state.hoveredId = null; dragged = null; renderDetails(nodes.find((node) => node.id === state.selectedId)); });
 canvas.addEventListener('mousedown', (event) => { dragged = hitNode(canvasPoint(event)); });
-window.addEventListener('mousemove', (event) => {
-  if (!dragged) return;
-  const p = canvasPoint(event);
-  dragged.x = p.x;
-  dragged.y = p.y;
-  dragged.vx = 0;
-  dragged.vy = 0;
-});
+window.addEventListener('mousemove', (event) => { if (!dragged) return; const p = canvasPoint(event); dragged.x = p.x; dragged.y = p.y; dragged.vx = 0; dragged.vy = 0; });
 window.addEventListener('mouseup', () => { dragged = null; });
 canvas.addEventListener('click', (event) => selectNode(hitNode(canvasPoint(event))));
-canvas.addEventListener('touchstart', (event) => {
-  const node = hitNode(canvasPoint(event));
-  if (!node) return;
-  event.preventDefault();
-  selectNode(node);
-}, { passive: false });
-
-backButton.addEventListener('click', () => {
-  state.view = 'home';
-  state.activeSectionId = null;
-  state.selectedId = null;
-  state.hoveredId = null;
-  refreshAll();
-});
-resetButton.addEventListener('click', () => {
-  state.selectedId = null;
-  state.hoveredId = null;
-  state.query = '';
-  searchInput.value = '';
-  renderDetails(null);
-  renderNotes();
-});
+canvas.addEventListener('touchstart', (event) => { const node = hitNode(canvasPoint(event)); if (!node) return; event.preventDefault(); selectNode(node); }, { passive: false });
+backButton.addEventListener('click', () => { state.view = 'home'; state.activeSectionId = null; state.selectedId = null; state.hoveredId = null; refreshAll(); });
+resetButton.addEventListener('click', () => { state.selectedId = null; state.hoveredId = null; state.query = ''; searchInput.value = ''; cancelEdit(); renderDetails(null); renderNotes(); });
 searchInput.addEventListener('input', (event) => { state.query = event.target.value; renderNotes(); });
 sectionSelect.addEventListener('change', () => newSectionLabel.classList.toggle('visible', sectionSelect.value === '__new'));
-
 addForm.addEventListener('submit', (event) => {
   event.preventDefault();
   let sectionId = sectionSelect.value;
   if (sectionId === '__new') {
-    const title = newSectionInput.value.trim();
-    if (!title) return;
+    const title = newSectionInput.value.trim(); if (!title) return;
     sectionId = `section-${makeId(title)}-${Date.now().toString(36)}`;
-    sections.push({ id: sectionId, title, description: 'Новый раздел. Описание можно будет дописать позже.', color: ['#ff72c8', '#ffd56c', '#66ffd2', '#7ad7ff', '#a77dff', '#ff8f70'][sections.length % 6], icon: '✦' });
+    sections.push({ id: sectionId, title, description: 'Новый раздел. Описание можно будет дописать позже.', color: ['#ff72c8', '#ffd56c', '#66ffd2', '#7ad7ff', '#a77dff', '#ff8f70', '#8cff9f', '#ff9df2'][sections.length % 8], icon: '✦' });
   }
-
-  const title = itemTitle.value.trim();
-  if (!title) return;
-  items.push({
-    id: `item-${makeId(title)}-${Date.now().toString(36)}`,
-    sectionId,
-    title,
-    comment: itemText.value.trim(),
-    tags: itemTags.value.split(',').map((tag) => tag.trim()).filter(Boolean)
-  });
-
-  saveData();
-  addForm.reset();
-  state.view = 'section';
-  state.activeSectionId = sectionId;
-  state.selectedId = null;
-  refreshAll();
-});
-
-copyDataButton.addEventListener('click', async () => {
-  const data = JSON.stringify({ sections, items }, null, 2);
-  exportBox.value = data;
-  try {
-    await navigator.clipboard.writeText(data);
-    copyDataButton.textContent = 'скопировано';
-    setTimeout(() => { copyDataButton.textContent = 'скопировать данные'; }, 1200);
-  } catch (error) {
-    exportBox.select();
+  const title = itemTitle.value.trim(); if (!title) return;
+  const payload = { sectionId, title, comment: itemText.value.trim(), tags: itemTags.value.split(',').map((tag) => tag.trim()).filter(Boolean) };
+  if (state.editingId) {
+    const item = getItem(state.editingId);
+    if (item) Object.assign(item, payload);
+  } else {
+    items.push({ id: `item-${makeId(title)}-${Date.now().toString(36)}`, ...payload });
   }
+  saveData(); addForm.reset(); state.editingId = null; addForm.querySelector('button[type="submit"]').textContent = 'добавить'; state.view = 'section'; state.activeSectionId = sectionId; state.selectedId = null; refreshAll();
 });
-
+copyDataButton.addEventListener('click', async () => { const data = JSON.stringify({ sections, items }, null, 2); exportBox.value = data; try { await navigator.clipboard.writeText(data); copyDataButton.textContent = 'скопировано'; setTimeout(() => { copyDataButton.textContent = 'скопировать данные'; }, 1200); } catch (error) { exportBox.select(); } });
 window.addEventListener('resize', () => { resize(); refreshAll(); });
 
-loadData();
-resize();
-refreshAll();
-draw();
+loadData(); resize(); refreshAll(); draw();
