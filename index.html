@@ -2,40 +2,62 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#160d25" />
-  <title>Tag Cloud Notes</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#090814" />
+  <title>Паутина важных мелочей</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <main class="app">
-    <section class="hero glass">
-      <div class="hero-top">
-        <span class="badge">beta</span>
-        <span class="muted">mobile friendly</span>
+  <div class="ambient ambient-one"></div>
+  <div class="ambient ambient-two"></div>
+  <div class="noise"></div>
+
+  <main class="layout">
+    <header class="hero">
+      <div class="eyebrow">
+        <span>memory web</span>
+        <span>prototype</span>
       </div>
-      <h1>Облако важных мелочей</h1>
-      <p>Мини-сайт для заметок, тегов, дат, идей, мест и маленьких деталей, которые хочется не забывать.</p>
-      <div class="stats" id="stats"></div>
-    </section>
+      <h1>Паутина важных мелочей</h1>
+      <p>Теги здесь живут как созвездие: точки связаны общими заметками, а при наведении остаётся только нужный смысловой след.</p>
+    </header>
 
-    <section class="glass controls">
-      <input id="search" type="search" placeholder="Поиск: подарок, дата, место, идея..." />
-      <div class="filters" id="filters"></div>
-    </section>
-
-    <section class="glass cloud-section">
-      <div class="section-title">
-        <div>
-          <h2>Облако тегов</h2>
-          <p>Нажми на тег, чтобы отфильтровать карточки.</p>
+    <section class="web-shell">
+      <div class="web-card">
+        <div class="web-toolbar">
+          <div>
+            <h2>Облако-созвездие</h2>
+            <p>Наведи курсор или нажми на точку. На телефоне — тап.</p>
+          </div>
+          <button class="soft-button" id="resetView" type="button">сбросить фокус</button>
         </div>
-        <button id="reset">сброс</button>
+        <div class="canvas-wrap" id="canvasWrap">
+          <canvas id="tagCanvas" aria-label="Интерактивная паутина тегов"></canvas>
+          <div class="hint">drag / hover / tap</div>
+        </div>
       </div>
-      <div class="cloud" id="cloud"></div>
+
+      <aside class="info-card" id="infoCard">
+        <div class="info-kicker">выбранный узел</div>
+        <h2 id="infoTitle">Наведи на тег</h2>
+        <p id="infoText">Связанные точки подсветятся, остальные приглушатся. Здесь появится описание тега и связанные заметки.</p>
+        <div class="meta-grid" id="infoMeta"></div>
+        <div class="related" id="relatedTags"></div>
+      </aside>
     </section>
 
-    <section class="cards" id="cards"></section>
+    <section class="panel-row">
+      <label class="search-panel">
+        <span>Поиск по заметкам</span>
+        <input id="searchInput" type="search" placeholder="например: горы, подарок, дата, место..." autocomplete="off" />
+      </label>
+      <div class="mini-stats" id="miniStats"></div>
+    </section>
+
+    <section class="notes-grid" id="notesGrid"></section>
   </main>
 
   <script src="data.js"></script>
