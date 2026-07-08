@@ -28,6 +28,7 @@ const titleInput = document.querySelector('#titleInput');
 const commentInput = document.querySelector('#commentInput');
 const tagsLabel = document.querySelector('#tagsLabel');
 const tagsInput = document.querySelector('#tagsInput');
+const tagSuggestions = document.querySelector('#tagSuggestions');
 const saveButton = document.querySelector('#saveButton');
 
 const STORAGE_KEY = 'memory-map-v03';
@@ -328,6 +329,7 @@ function shownItems() {
 }
 
 function renderPanel() {
+  if (state.editor) return;
   const selected = getSelectedNode();
   const section = state.view === 'section' ? activeSection() : null;
   const target = selected || (section ? nodeById(section.id) : null);
@@ -403,6 +405,37 @@ function addChip(label, action) {
   return chip;
 }
 
+function allTags() {
+  const counts = new Map();
+  items.forEach((item) => (item.tags || []).forEach((tag) => counts.set(tag, (counts.get(tag) || 0) + 1)));
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([tag]) => tag);
+}
+function currentTags() {
+  return tagsInput.value.split(',').map((tag) => tag.trim()).filter(Boolean);
+}
+function addTagToInput(tag) {
+  const tags = currentTags();
+  if (!tags.includes(tag)) tags.push(tag);
+  tagsInput.value = tags.join(', ');
+  renderTagSuggestions();
+  tagsInput.focus();
+}
+function renderTagSuggestions() {
+  if (!tagSuggestions) return;
+  tagSuggestions.textContent = '';
+  if (tagsLabel.classList.contains('hidden')) return;
+  const used = new Set(currentTags());
+  const last = norm(tagsInput.value.split(',').pop());
+  const candidates = allTags().filter((tag) => !used.has(tag) && (!last || norm(tag).includes(last))).slice(0, 14);
+  candidates.forEach((tag) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = `#${tag}`;
+    button.addEventListener('click', () => addTagToInput(tag));
+    tagSuggestions.appendChild(button);
+  });
+}
+
 function fillSectionSelect() {
   sectionSelect.textContent = '';
   sections.forEach((section) => {
@@ -428,12 +461,14 @@ function openEditor(mode, targetId = null) {
   editorTitle.textContent = isSection ? (isEdit ? 'Раздел' : 'Новый раздел') : (isEdit ? 'Запись' : 'Новая запись');
   sectionPickLabel.classList.toggle('hidden', isSection);
   tagsLabel.classList.toggle('hidden', isSection);
+  tagSuggestions.classList.toggle('hidden', isSection);
 
   titleInput.value = targetSection?.title || targetItem?.title || '';
   commentInput.value = targetSection?.description || targetItem?.comment || '';
   tagsInput.value = targetItem ? (targetItem.tags || []).join(', ') : '';
   sectionSelect.value = targetItem?.sectionId || state.activeSectionId || sections[0]?.id || '';
   saveButton.textContent = isEdit ? 'сохранить правки' : 'добавить';
+  renderTagSuggestions();
   setTimeout(() => titleInput.focus(), 50);
 }
 
@@ -442,6 +477,7 @@ function closeEditor() {
   editorBlock.classList.remove('open');
   sidePanel.classList.remove('editing');
   editForm.reset();
+  renderPanel();
 }
 
 function currentTargetForEdit() {
@@ -467,6 +503,7 @@ editButton.addEventListener('click', () => {
   openEditor(target.type === 'item' ? 'edit-item' : 'edit-section', target.id);
 });
 closeEditorButton.addEventListener('click', closeEditor);
+tagsInput.addEventListener('input', renderTagSuggestions);
 
 editForm.addEventListener('submit', (event) => {
   event.preventDefault();
@@ -529,8 +566,7 @@ searchInput.addEventListener('input', (event) => { state.query = event.target.va
 canvas.addEventListener('mousemove', (event) => {
   const node = hitNode(canvasPoint(event));
   state.hoveredId = node?.id || null;
-  if (node) renderPanel();
-  else renderPanel();
+  renderPanel();
   canvas.style.cursor = node ? 'pointer' : 'default';
 });
 canvas.addEventListener('mouseleave', () => { state.hoveredId = null; dragged = null; renderPanel(); });
