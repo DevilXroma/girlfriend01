@@ -2,6 +2,7 @@ const canvas = document.querySelector('#tagCanvas');
 const wrap = document.querySelector('#canvasWrap');
 const ctx = canvas.getContext('2d');
 const resetButton = document.querySelector('#resetView');
+const fitButton = document.querySelector('#fitView');
 const infoTitle = document.querySelector('#infoTitle');
 const infoText = document.querySelector('#infoText');
 const infoMeta = document.querySelector('#infoMeta');
@@ -9,132 +10,162 @@ const relatedTags = document.querySelector('#relatedTags');
 const searchInput = document.querySelector('#searchInput');
 const miniStats = document.querySelector('#miniStats');
 const notesGrid = document.querySelector('#notesGrid');
+const addForm = document.querySelector('#addForm');
+const sectionSelect = document.querySelector('#sectionSelect');
+const newSectionInput = document.querySelector('#newSectionInput');
+const itemTitle = document.querySelector('#itemTitle');
+const itemText = document.querySelector('#itemText');
+const itemTags = document.querySelector('#itemTags');
 
-const pointer = { x: 0, y: 0, active: false };
-const state = { selected: null, hovered: null, query: '' };
+const STORE_KEY = 'memory-web-v2';
+const state = { selectedId: null, hoveredId: null, query: '' };
 let dpr = 1;
 let width = 0;
 let height = 0;
+let sections = [];
+let items = [];
 let nodes = [];
 let links = [];
-let animationId = 0;
 let dragged = null;
 
-const palette = ['#ff72c8', '#a77dff', '#66ffd2', '#ffd56c', '#7ad7ff', '#ff8f70'];
+function loadData() {
+  const saved = localStorage.getItem(STORE_KEY);
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
+      sections = parsed.sections || DEFAULT_SECTIONS;
+      items = parsed.items || DEFAULT_ITEMS;
+      return;
+    } catch (error) {
+      console.warn(error);
+    }
+  }
+  sections = structuredClone(DEFAULT_SECTIONS);
+  items = structuredClone(DEFAULT_ITEMS);
+}
+
+function saveData() {
+  localStorage.setItem(STORE_KEY, JSON.stringify({ sections, items }));
+}
+
+function slug(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-zа-яё0-9]+/gi, '-')
+    .replace(/^-|-$/g, '') || `node-${Date.now()}`;
+}
 
 function normalize(value) {
   return String(value || '').toLowerCase().trim();
 }
 
-function unique(items) {
-  return [...new Set(items)];
-}
-
-function buildGraph() {
-  const counts = new Map();
-  NOTES.forEach((note) => note.tags.forEach((tag) => counts.set(tag, (counts.get(tag) || 0) + 1)));
-
-  const tagList = [...counts.keys()].sort((a, b) => counts.get(b) - counts.get(a));
-  nodes = tagList.map((tag, index) => {
-    const angle = (index / tagList.length) * Math.PI * 2;
-    const ring = index % 3;
-    const radius = 95 + ring * 58 + counts.get(tag) * 5;
-    return {
-      tag,
-      count: counts.get(tag),
-      x: Math.cos(angle) * radius,
-      y: Math.sin(angle) * radius,
-      vx: 0,
-      vy: 0,
-      r: 9 + counts.get(tag) * 2.4,
-      color: palette[index % palette.length],
-      pulse: Math.random() * Math.PI * 2
-    };
-  });
-
-  const linkMap = new Map();
-  NOTES.forEach((note) => {
-    for (let i = 0; i < note.tags.length; i += 1) {
-      for (let j = i + 1; j < note.tags.length; j += 1) {
-        const a = note.tags[i];
-        const b = note.tags[j];
-        const key = [a, b].sort().join('::');
-        linkMap.set(key, (linkMap.get(key) || 0) + 1);
-      }
-    }
-  });
-
-  links = [...linkMap.entries()].map(([key, weight]) => {
-    const [a, b] = key.split('::');
-    return {
-      a: nodes.find((node) => node.tag === a),
-      b: nodes.find((node) => node.tag === b),
-      weight
-    };
-  }).filter((link) => link.a && link.b);
-}
-
 function resize() {
   const rect = wrap.getBoundingClientRect();
   dpr = Math.min(window.devicePixelRatio || 1, 2);
-  width = Math.max(320, rect.width);
-  height = Math.max(420, rect.height);
+  width = Math.max(340, rect.width);
+  height = Math.max(520, rect.height);
   canvas.width = Math.floor(width * dpr);
   canvas.height = Math.floor(height * dpr);
   canvas.style.width = `${width}px`;
   canvas.style.height = `${height}px`;
-  ctx.setTransform(dpr, 0, 0, dpr, width / 2 * dpr, height / 2 * dpr);
 }
 
-function getFocusTag() {
-  return state.hovered || state.selected;
-}
+function buildGraph(spread = false) {
+  const sectionCount = sections.length;
+  const majorRadiusX = Math.min(width * 0.37, 420);
+  const majorRadiusY = Math.min(height * 0.34, 300);
+  nodes = [];
+  links = [];
 
-function getConnectedTags(tag) {
-  if (!tag) return new Set();
-  const connected = new Set([tag]);
-  links.forEach((link) => {
-    if (link.a.tag === tag) connected.add(link.b.tag);
-    if (link.b.tag === tag) connected.add(link.a.tag);
+  sections.forEach((section, index) => {
+    const angle = -Math.PI / 2 + index / sectionCount * Math.PI * 2;
+    const x = Math.cos(angle) * majorRadiusX;
+    const y = Math.sin(angle) * majorRadiusY;
+    nodes.push({
+      id: section.id,
+      type: 'section',
+      title: section.title,
+      text: section.note,
+      color: section.color,
+      x: spread ? x : x * 0.85,
+      y: spread ? y : y * 0.85,
+      homeX: x,
+      homeY: y,
+      vx: 0,
+      vy: 0,
+      r: 28,
+      sectionId: section.id,
+      tags: []
+    });
   });
-  return connected;
+
+  sections.forEach((section) => {
+    const parent = nodes.find((node) => node.id === section.id);
+    const childItems = items.filter((item) => item.sectionId === section.id);
+    childItems.forEach((item, index) => {
+      const angle = index / Math.max(1, childItems.length) * Math.PI * 2 + 0.7;
+      const orbit = 105 + (index % 3) * 34;
+      const node = {
+        id: item.id,
+        type: 'item',
+        title: item.title,
+        text: item.text,
+        color: section.color,
+        x: parent.homeX + Math.cos(angle) * orbit,
+        y: parent.homeY + Math.sin(angle) * orbit,
+        homeX: parent.homeX + Math.cos(angle) * orbit,
+        homeY: parent.homeY + Math.sin(angle) * orbit,
+        vx: 0,
+        vy: 0,
+        r: 15,
+        sectionId: section.id,
+        tags: item.tags || []
+      };
+      nodes.push(node);
+      links.push({ a: parent, b: node, type: 'parent', weight: 2.3 });
+    });
+  });
+
+  for (let i = 0; i < nodes.length; i += 1) {
+    for (let j = i + 1; j < nodes.length; j += 1) {
+      const a = nodes[i];
+      const b = nodes[j];
+      if (a.type !== 'item' || b.type !== 'item') continue;
+      const shared = a.tags.filter((tag) => b.tags.includes(tag));
+      if (shared.length) links.push({ a, b, type: 'tag', weight: shared.length * 0.55 });
+    }
+  }
 }
 
-function isNodeActive(node, connected) {
-  const focus = getFocusTag();
-  return !focus || connected.has(node.tag);
+function selectedNode() {
+  return nodes.find((node) => node.id === (state.hoveredId || state.selectedId));
 }
 
-function isLinkActive(link, focus) {
-  return !focus || link.a.tag === focus || link.b.tag === focus;
+function relatedIds(node) {
+  if (!node) return new Set();
+  const result = new Set([node.id]);
+  links.forEach((link) => {
+    if (link.a.id === node.id) result.add(link.b.id);
+    if (link.b.id === node.id) result.add(link.a.id);
+  });
+  if (node.type === 'section') {
+    nodes.filter((item) => item.sectionId === node.id).forEach((item) => result.add(item.id));
+  }
+  return result;
 }
 
-function applyPhysics() {
-  const focus = getFocusTag();
-  const connected = getConnectedTags(focus);
+function physics() {
+  const focus = selectedNode();
+  const related = relatedIds(focus);
 
-  nodes.forEach((node, index) => {
+  nodes.forEach((node) => {
     if (node === dragged) return;
-
-    const baseAngle = (index / nodes.length) * Math.PI * 2;
-    const targetRadius = 128 + (index % 4) * 42 + node.count * 10;
-    const targetX = Math.cos(baseAngle) * targetRadius;
-    const targetY = Math.sin(baseAngle) * targetRadius;
-
-    node.vx += (targetX - node.x) * 0.0009;
-    node.vy += (targetY - node.y) * 0.0009;
-
-    if (focus) {
-      const active = connected.has(node.tag);
-      const focusNode = nodes.find((item) => item.tag === focus);
-      if (focusNode && active && node !== focusNode) {
-        node.vx += (focusNode.x - node.x) * 0.00045;
-        node.vy += (focusNode.y - node.y) * 0.00045;
-      }
-      if (!active) {
-        node.vx += (node.x > 0 ? 0.006 : -0.006);
-        node.vy += (node.y > 0 ? 0.004 : -0.004);
-      }
+    const homeForce = node.type === 'section' ? 0.006 : 0.003;
+    node.vx += (node.homeX - node.x) * homeForce;
+    node.vy += (node.homeY - node.y) * homeForce;
+    if (focus && !related.has(node.id)) {
+      node.vx += (node.x > 0 ? 0.012 : -0.012);
+      node.vy += (node.y > 0 ? 0.008 : -0.008);
     }
   });
 
@@ -142,7 +173,7 @@ function applyPhysics() {
     const dx = link.b.x - link.a.x;
     const dy = link.b.y - link.a.y;
     const dist = Math.hypot(dx, dy) || 1;
-    const target = 92 + link.weight * 17;
+    const target = link.type === 'parent' ? 130 : 220;
     const force = (dist - target) * 0.0009 * link.weight;
     const fx = dx / dist * force;
     const fy = dy / dist * force;
@@ -157,9 +188,9 @@ function applyPhysics() {
       const dx = b.x - a.x;
       const dy = b.y - a.y;
       const dist = Math.hypot(dx, dy) || 1;
-      const min = a.r + b.r + 20;
+      const min = a.r + b.r + (a.type === 'section' || b.type === 'section' ? 58 : 32);
       if (dist < min) {
-        const push = (min - dist) * 0.003;
+        const push = (min - dist) * 0.012;
         const fx = dx / dist * push;
         const fy = dy / dist * push;
         if (a !== dragged) { a.vx -= fx; a.vy -= fy; }
@@ -170,16 +201,14 @@ function applyPhysics() {
 
   nodes.forEach((node) => {
     if (node === dragged) return;
-    node.vx *= 0.91;
-    node.vy *= 0.91;
+    node.vx *= 0.86;
+    node.vy *= 0.86;
     node.x += node.vx;
     node.y += node.vy;
-
-    const padX = width / 2 - 42;
-    const padY = height / 2 - 42;
-    node.x = Math.max(-padX, Math.min(padX, node.x));
-    node.y = Math.max(-padY, Math.min(padY, node.y));
-    node.pulse += 0.035;
+    const limitX = width / 2 - 44;
+    const limitY = height / 2 - 44;
+    node.x = Math.max(-limitX, Math.min(limitX, node.x));
+    node.y = Math.max(-limitY, Math.min(limitY, node.y));
   });
 }
 
@@ -188,262 +217,247 @@ function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.setTransform(dpr, 0, 0, dpr, width / 2, height / 2);
 
-  const focus = getFocusTag();
-  const connected = getConnectedTags(focus);
+  const focus = selectedNode();
+  const related = relatedIds(focus);
 
-  ctx.save();
-  ctx.globalCompositeOperation = 'lighter';
   links.forEach((link) => {
-    const active = isLinkActive(link, focus);
-    const alpha = active ? 0.36 + link.weight * 0.1 : 0.045;
-    const gradient = ctx.createLinearGradient(link.a.x, link.a.y, link.b.x, link.b.y);
-    gradient.addColorStop(0, link.a.color);
-    gradient.addColorStop(1, link.b.color);
-    ctx.strokeStyle = gradient;
-    ctx.globalAlpha = alpha;
-    ctx.lineWidth = active ? 1.4 + link.weight * 0.55 : 0.8;
+    const active = !focus || related.has(link.a.id) && related.has(link.b.id);
+    ctx.save();
+    ctx.globalAlpha = active ? (link.type === 'parent' ? 0.62 : 0.26) : 0.045;
+    ctx.strokeStyle = link.type === 'parent' ? link.a.color : 'rgba(255,255,255,.45)';
+    ctx.lineWidth = link.type === 'parent' ? 2.2 : 1;
+    ctx.shadowColor = link.a.color;
+    ctx.shadowBlur = active ? 12 : 0;
     ctx.beginPath();
     ctx.moveTo(link.a.x, link.a.y);
-    const midX = (link.a.x + link.b.x) / 2;
-    const midY = (link.a.y + link.b.y) / 2;
-    ctx.quadraticCurveTo(midX * 1.03, midY * 1.03, link.b.x, link.b.y);
+    ctx.lineTo(link.b.x, link.b.y);
     ctx.stroke();
+    ctx.restore();
   });
-  ctx.restore();
 
   nodes.forEach((node) => {
-    const active = isNodeActive(node, connected);
-    const selected = node.tag === focus;
-    const glow = selected ? 34 : active ? 20 : 5;
-    const alpha = active ? 1 : 0.22;
-    const radius = node.r + Math.sin(node.pulse) * 1.2 + (selected ? 8 : 0);
-
+    const active = !focus || related.has(node.id);
+    const selected = focus && focus.id === node.id;
+    const radius = node.r + (selected ? 8 : 0);
     ctx.save();
-    ctx.globalAlpha = alpha;
+    ctx.globalAlpha = active ? 1 : 0.2;
     ctx.shadowColor = node.color;
-    ctx.shadowBlur = glow;
+    ctx.shadowBlur = node.type === 'section' ? 28 : 18;
     ctx.fillStyle = node.color;
     ctx.beginPath();
     ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
     ctx.fill();
-
     ctx.shadowBlur = 0;
-    ctx.fillStyle = selected ? '#fff' : 'rgba(255,255,255,.92)';
-    ctx.font = `${selected ? 800 : 700} ${selected ? 15 : 13}px Inter, sans-serif`;
+    ctx.fillStyle = '#fff';
+    ctx.font = `${node.type === 'section' ? 900 : 750} ${node.type === 'section' ? 16 : 13}px Inter, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(node.tag, node.x, node.y - radius - 14);
-
+    const labelY = node.y - radius - (node.type === 'section' ? 18 : 13);
+    ctx.fillText(node.title, node.x, labelY);
+    if (node.type === 'section') {
+      const count = items.filter((item) => item.sectionId === node.id).length;
+      ctx.fillStyle = 'rgba(255,255,255,.72)';
+      ctx.font = '700 11px Inter, sans-serif';
+      ctx.fillText(`${count} точек`, node.x, node.y + radius + 17);
+    }
     if (selected) {
-      ctx.strokeStyle = 'rgba(255,255,255,.75)';
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = 'rgba(255,255,255,.85)';
+      ctx.lineWidth = 1.6;
       ctx.beginPath();
-      ctx.arc(node.x, node.y, radius + 8, 0, Math.PI * 2);
+      ctx.arc(node.x, node.y, radius + 10, 0, Math.PI * 2);
       ctx.stroke();
     }
     ctx.restore();
   });
 
-  applyPhysics();
-  animationId = requestAnimationFrame(draw);
+  physics();
+  requestAnimationFrame(draw);
 }
 
-function canvasPoint(event) {
+function point(event) {
   const rect = canvas.getBoundingClientRect();
-  const clientX = event.touches ? event.touches[0].clientX : event.clientX;
-  const clientY = event.touches ? event.touches[0].clientY : event.clientY;
-  return { x: clientX - rect.left - rect.width / 2, y: clientY - rect.top - rect.height / 2 };
+  const source = event.touches ? event.touches[0] : event;
+  return { x: source.clientX - rect.left - rect.width / 2, y: source.clientY - rect.top - rect.height / 2 };
 }
 
-function findNode(point) {
-  return nodes.find((node) => Math.hypot(node.x - point.x, node.y - point.y) < node.r + 24) || null;
+function hit(p) {
+  return [...nodes].reverse().find((node) => Math.hypot(node.x - p.x, node.y - p.y) < node.r + 26) || null;
 }
 
-function notesForTag(tag) {
-  if (!tag) return NOTES;
-  return NOTES.filter((note) => note.tags.includes(tag));
-}
-
-function renderInfo(tag) {
-  const focus = tag || state.selected;
-  if (!focus) {
-    infoTitle.textContent = 'Наведи на тег';
-    infoText.textContent = 'Связанные точки подсветятся, остальные приглушатся. Здесь появится описание тега и связанные заметки.';
+function renderInfo(node) {
+  if (!node) {
+    infoTitle.textContent = 'Выбери точку';
+    infoText.textContent = 'Большие точки — разделы. Маленькие — конкретные записи внутри них. Можно добавлять новые точки через форму ниже.';
     infoMeta.textContent = '';
     relatedTags.textContent = '';
     return;
   }
-
-  const related = [...getConnectedTags(focus)].filter((tagName) => tagName !== focus);
-  const notes = notesForTag(focus);
-  infoTitle.textContent = `#${focus}`;
-  infoText.textContent = TAG_INFO[focus] || 'Пока это демо-тег. Позже сюда добавим реальное описание.';
-
+  infoTitle.textContent = node.title;
+  infoText.textContent = node.text || 'Пока без комментария.';
   infoMeta.textContent = '';
-  [[notes.length, 'заметок'], [related.length, 'связей']].forEach(([value, label]) => {
+  const children = items.filter((item) => item.sectionId === node.id);
+  const tags = node.type === 'item' ? node.tags : [];
+  const meta = node.type === 'section' ? [[children.length, 'вложений']] : [[tags.length, 'тегов']];
+  meta.push([relatedIds(node).size - 1, 'связей']);
+  meta.forEach(([num, label]) => {
     const box = document.createElement('div');
-    const strong = document.createElement('strong');
-    const span = document.createElement('span');
-    strong.textContent = value;
-    span.textContent = label;
-    box.append(strong, span);
-    infoMeta.appendChild(box);
-  });
-
-  relatedTags.textContent = '';
-  related.slice(0, 10).forEach((tagName) => {
-    const chip = document.createElement('button');
-    chip.type = 'button';
-    chip.textContent = `#${tagName}`;
-    chip.addEventListener('click', () => {
-      state.selected = tagName;
-      state.hovered = null;
-      renderInfo(tagName);
-      renderNotes();
-    });
-    relatedTags.appendChild(chip);
-  });
-}
-
-function renderStats(items) {
-  miniStats.textContent = '';
-  const tagsCount = unique(NOTES.flatMap((note) => note.tags)).length;
-  const values = [
-    [NOTES.length, 'записей'],
-    [tagsCount, 'тегов'],
-    [links.length, 'связей'],
-    [items.length, 'показано']
-  ];
-  values.forEach(([num, label]) => {
-    const item = document.createElement('div');
     const strong = document.createElement('strong');
     const span = document.createElement('span');
     strong.textContent = num;
     span.textContent = label;
-    item.append(strong, span);
-    miniStats.appendChild(item);
+    box.append(strong, span);
+    infoMeta.appendChild(box);
+  });
+  relatedTags.textContent = '';
+  const list = node.type === 'section' ? children.map((item) => item.title) : tags.map((tag) => `#${tag}`);
+  list.slice(0, 12).forEach((label) => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.textContent = label;
+    relatedTags.appendChild(chip);
   });
 }
 
-function renderNotes() {
-  const focus = state.selected;
-  const query = normalize(state.query);
-  const items = NOTES.filter((note) => {
-    const byTag = !focus || note.tags.includes(focus);
-    const text = normalize([note.title, note.category, note.date, note.text, ...note.tags].join(' '));
-    return byTag && (!query || text.includes(query));
+function visibleItems() {
+  const selected = nodes.find((node) => node.id === state.selectedId);
+  const q = normalize(state.query);
+  return items.filter((item) => {
+    const sectionOk = !selected || selected.type !== 'section' || item.sectionId === selected.id;
+    const itemOk = !selected || selected.type !== 'item' || item.id === selected.id;
+    const text = normalize([item.title, item.text, ...item.tags, sections.find((s) => s.id === item.sectionId)?.title].join(' '));
+    return sectionOk && itemOk && (!q || text.includes(q));
   });
+}
 
-  renderStats(items);
+function renderStats(list) {
+  miniStats.textContent = '';
+  [[sections.length, 'разделов'], [items.length, 'точек'], [links.length, 'связей'], [list.length, 'показано']].forEach(([num, label]) => {
+    const box = document.createElement('div');
+    const strong = document.createElement('strong');
+    const span = document.createElement('span');
+    strong.textContent = num;
+    span.textContent = label;
+    box.append(strong, span);
+    miniStats.appendChild(box);
+  });
+}
+
+function renderCards() {
+  const list = visibleItems();
+  renderStats(list);
   notesGrid.textContent = '';
-
-  items.forEach((note) => {
+  list.forEach((item) => {
+    const section = sections.find((s) => s.id === item.sectionId);
     const card = document.createElement('article');
     card.className = 'note-card';
-
     const top = document.createElement('div');
     top.className = 'note-top';
-    const category = document.createElement('span');
-    category.textContent = note.category;
-    const date = document.createElement('small');
-    date.textContent = note.date;
-    top.append(category, date);
-
-    const title = document.createElement('h3');
-    title.textContent = note.title;
-    const text = document.createElement('p');
-    text.textContent = note.text;
-
-    const tags = document.createElement('div');
-    tags.className = 'note-tags';
-    note.tags.forEach((tag) => {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.textContent = `#${tag}`;
-      if (tag === focus) button.classList.add('active');
-      button.addEventListener('click', () => {
-        state.selected = tag;
-        state.hovered = null;
-        renderInfo(tag);
-        renderNotes();
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      });
-      tags.appendChild(button);
+    const sec = document.createElement('span');
+    sec.textContent = section?.title || 'Раздел';
+    const small = document.createElement('small');
+    small.textContent = item.tags.slice(0, 2).join(', ') || 'без тегов';
+    top.append(sec, small);
+    const h3 = document.createElement('h3');
+    h3.textContent = item.title;
+    const p = document.createElement('p');
+    p.textContent = item.text || 'Без комментария.';
+    const tagBox = document.createElement('div');
+    tagBox.className = 'note-tags';
+    item.tags.forEach((tag) => {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.textContent = `#${tag}`;
+      tagBox.appendChild(chip);
     });
-
-    card.append(top, title, text, tags);
+    card.append(top, h3, p, tagBox);
     notesGrid.appendChild(card);
   });
 }
 
+function fillSectionSelect() {
+  sectionSelect.textContent = '';
+  sections.forEach((section) => {
+    const option = document.createElement('option');
+    option.value = section.id;
+    option.textContent = section.title;
+    sectionSelect.appendChild(option);
+  });
+  const option = document.createElement('option');
+  option.value = '__new';
+  option.textContent = '+ новый раздел';
+  sectionSelect.appendChild(option);
+}
+
+function refresh(spread = false) {
+  buildGraph(spread);
+  fillSectionSelect();
+  renderInfo(nodes.find((node) => node.id === state.selectedId));
+  renderCards();
+}
+
 canvas.addEventListener('mousemove', (event) => {
-  const point = canvasPoint(event);
-  pointer.x = point.x;
-  pointer.y = point.y;
-  const node = findNode(point);
-  state.hovered = node ? node.tag : null;
-  renderInfo(state.hovered || state.selected);
+  const node = hit(point(event));
+  state.hoveredId = node?.id || null;
+  renderInfo(node || nodes.find((n) => n.id === state.selectedId));
   canvas.style.cursor = node ? 'pointer' : 'default';
 });
-
 canvas.addEventListener('mouseleave', () => {
-  state.hovered = null;
+  state.hoveredId = null;
   dragged = null;
-  renderInfo(state.selected);
+  renderInfo(nodes.find((node) => node.id === state.selectedId));
 });
-
-canvas.addEventListener('mousedown', (event) => {
-  const node = findNode(canvasPoint(event));
-  if (node) dragged = node;
-});
-
+canvas.addEventListener('mousedown', (event) => { dragged = hit(point(event)); });
 window.addEventListener('mousemove', (event) => {
   if (!dragged) return;
-  const point = canvasPoint(event);
-  dragged.x = point.x;
-  dragged.y = point.y;
-  dragged.vx = 0;
-  dragged.vy = 0;
+  const p = point(event);
+  dragged.x = p.x; dragged.y = p.y; dragged.vx = 0; dragged.vy = 0;
 });
-
 window.addEventListener('mouseup', () => { dragged = null; });
-
 canvas.addEventListener('click', (event) => {
-  const node = findNode(canvasPoint(event));
-  state.selected = node ? (state.selected === node.tag ? null : node.tag) : null;
-  state.hovered = null;
-  renderInfo(state.selected);
-  renderNotes();
+  const node = hit(point(event));
+  state.selectedId = node ? (state.selectedId === node.id ? null : node.id) : null;
+  state.hoveredId = null;
+  renderInfo(nodes.find((n) => n.id === state.selectedId));
+  renderCards();
 });
-
 canvas.addEventListener('touchstart', (event) => {
-  const node = findNode(canvasPoint(event));
-  if (node) {
-    event.preventDefault();
-    state.selected = state.selected === node.tag ? null : node.tag;
-    renderInfo(state.selected);
-    renderNotes();
-  }
+  const node = hit(point(event));
+  if (!node) return;
+  event.preventDefault();
+  state.selectedId = state.selectedId === node.id ? null : node.id;
+  renderInfo(nodes.find((n) => n.id === state.selectedId));
+  renderCards();
 }, { passive: false });
 
-searchInput.addEventListener('input', (event) => {
-  state.query = event.target.value;
-  renderNotes();
+searchInput.addEventListener('input', (event) => { state.query = event.target.value; renderCards(); });
+resetButton.addEventListener('click', () => { state.selectedId = null; state.hoveredId = null; state.query = ''; searchInput.value = ''; renderInfo(null); renderCards(); });
+fitButton.addEventListener('click', () => refresh(true));
+window.addEventListener('resize', () => { resize(); refresh(true); });
+
+addForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  let sectionId = sectionSelect.value;
+  if (sectionId === '__new') {
+    const title = newSectionInput.value.trim();
+    if (!title) return;
+    sectionId = slug(title);
+    sections.push({ id: sectionId, title, note: 'Новый раздел. Описание можно будет дописать позже.', color: ['#ff72c8','#ffd56c','#66ffd2','#7ad7ff','#a77dff','#ff8f70'][sections.length % 6] });
+  }
+  const title = itemTitle.value.trim();
+  if (!title) return;
+  items.push({
+    id: `${sectionId}-${slug(title)}-${Date.now().toString(36)}`,
+    sectionId,
+    title,
+    text: itemText.value.trim(),
+    tags: itemTags.value.split(',').map((x) => x.trim()).filter(Boolean)
+  });
+  saveData();
+  addForm.reset();
+  refresh(true);
 });
 
-resetButton.addEventListener('click', () => {
-  state.selected = null;
-  state.hovered = null;
-  searchInput.value = '';
-  state.query = '';
-  renderInfo(null);
-  renderNotes();
-});
-
-window.addEventListener('resize', resize);
-
-buildGraph();
+loadData();
 resize();
-renderInfo(null);
-renderNotes();
+refresh(true);
 draw();
