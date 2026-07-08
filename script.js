@@ -17,6 +17,7 @@ const detailStats = document.querySelector('#detailStats');
 const insideList = document.querySelector('#insideList');
 const addItemButton = document.querySelector('#addItemButton');
 const editButton = document.querySelector('#editButton');
+const deleteButton = document.querySelector('#deleteButton');
 const editorBlock = document.querySelector('#editorBlock');
 const editorMode = document.querySelector('#editorMode');
 const editorTitle = document.querySelector('#editorTitle');
@@ -40,6 +41,7 @@ let width = 0;
 let height = 0;
 let dpr = 1;
 let dragged = null;
+let didMove = false;
 const state = { view: 'home', activeSectionId: null, selectedId: null, hoveredId: null, query: '', editor: null };
 
 function isMobile() { return window.matchMedia('(max-width: 980px)').matches; }
@@ -61,7 +63,9 @@ function loadData() {
       sections = parsed.sections || clone(DEFAULT_SECTIONS);
       items = parsed.items || clone(DEFAULT_ITEMS);
       return;
-    } catch (error) { console.warn(error); }
+    } catch (error) {
+      console.warn(error);
+    }
   }
   sections = clone(DEFAULT_SECTIONS);
   items = clone(DEFAULT_ITEMS);
@@ -73,15 +77,15 @@ function resize() {
   dpr = Math.min(window.devicePixelRatio || 1, 2);
   width = Math.max(300, rect.width);
   height = Math.max(400, rect.height);
-  canvas.width = Math.floor(width * dpr);
-  canvas.height = Math.floor(height * dpr);
+  canvas.width = Math.round(width * dpr);
+  canvas.height = Math.round(height * dpr);
   canvas.style.width = `${width}px`;
   canvas.style.height = `${height}px`;
 }
 
 function buildHome() {
   const mobile = isMobile();
-  const count = sections.length || 1;
+  const count = Math.max(1, sections.length);
   const rx = Math.min(width * (mobile ? 0.28 : 0.34), mobile ? 150 : 430);
   const ry = Math.min(height * (mobile ? 0.26 : 0.31), mobile ? 170 : 300);
   nodes = sections.map((section, index) => {
@@ -102,14 +106,15 @@ function buildHome() {
       tags: []
     };
   });
-  links = nodes.map((node, index) => ({ a: node, b: nodes[(index + 1) % nodes.length], type: 'soft', weight: 1 }));
+  links = nodes.length > 1 ? nodes.map((node, index) => ({ a: node, b: nodes[(index + 1) % nodes.length], type: 'soft', weight: 1 })) : [];
 }
 
 function buildSection(sectionId) {
   const mobile = isMobile();
   const section = sectionOf(sectionId) || sections[0];
+  if (!section) { nodes = []; links = []; return; }
   const list = items.filter((item) => item.sectionId === section.id);
-  const centerY = mobile ? -8 : 0;
+  const centerY = mobile ? -6 : 0;
   const center = {
     id: section.id,
     type: 'section-center',
@@ -183,7 +188,7 @@ function renderHeader() {
   } else {
     const section = activeSection();
     modeLabel.textContent = 'раздел';
-    mapTitle.textContent = section.title;
+    mapTitle.textContent = section ? section.title : 'Раздел';
     mapHint.textContent = 'Каждая точка — запись: название, комментарий и теги. Неполная информация тоже нормальна.';
   }
   mapStats.textContent = '';
@@ -231,6 +236,7 @@ function physics() {
       node.vy += (node.y > 0 ? 0.006 : -0.006);
     }
   });
+
   links.forEach((link) => {
     const dx = link.b.x - link.a.x;
     const dy = link.b.y - link.a.y;
@@ -242,6 +248,7 @@ function physics() {
     if (link.a !== dragged) { link.a.vx += fx; link.a.vy += fy; }
     if (link.b !== dragged) { link.b.vx -= fx; link.b.vy -= fy; }
   });
+
   for (let i = 0; i < nodes.length; i += 1) {
     for (let j = i + 1; j < nodes.length; j += 1) {
       const a = nodes[i];
@@ -259,6 +266,7 @@ function physics() {
       }
     }
   }
+
   nodes.forEach((node) => {
     if (node === dragged) return;
     node.vx *= mobile ? 0.78 : 0.86;
@@ -291,9 +299,10 @@ function drawLabel(node, radius, active, selected) {
 
 function draw() {
   const mobile = isMobile();
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.setTransform(dpr, 0, 0, dpr, width / 2, height / 2);
+  ctx.setTransform(dpr, 0, 0, dpr, (width * dpr) / 2, (height * dpr) / 2);
+
   const focus = nodeById(focusId());
   const related = relatedIds(focus);
   const hasQuery = Boolean(norm(state.query));
@@ -354,6 +363,7 @@ function draw() {
     }
     ctx.restore();
   });
+
   physics();
   requestAnimationFrame(draw);
 }
@@ -363,7 +373,9 @@ function canvasPoint(event) {
   const source = event.touches ? event.touches[0] : event;
   return { x: source.clientX - rect.left - rect.width / 2, y: source.clientY - rect.top - rect.height / 2 };
 }
-function hitNode(point) { return [...nodes].reverse().find((node) => Math.hypot(node.x - point.x, node.y - point.y) < node.r + (isMobile() ? 18 : 28)) || null; }
+function hitNode(point) {
+  return [...nodes].reverse().find((node) => Math.hypot(node.x - point.x, node.y - point.y) < node.r + (isMobile() ? 18 : 28)) || null;
+}
 
 function selectNode(node) {
   if (!node) { state.selectedId = null; renderPanel(); return; }
@@ -394,6 +406,7 @@ function renderPanel() {
     insideList.textContent = '';
     addItemButton.disabled = true;
     editButton.disabled = true;
+    deleteButton.disabled = true;
   } else {
     const isItem = target.type === 'item';
     detailsOverline.textContent = isItem ? 'запись' : 'раздел';
@@ -401,6 +414,7 @@ function renderPanel() {
     detailsText.textContent = target.comment || 'Пока без комментария. Можно дописать позже.';
     addItemButton.disabled = isItem && !state.activeSectionId;
     editButton.disabled = false;
+    deleteButton.disabled = false;
     renderDetailStats(target);
     renderInside(target);
   }
@@ -483,6 +497,7 @@ function renderTagSuggestions() {
     tagSuggestions.appendChild(button);
   });
 }
+
 function fillSectionSelect() {
   sectionSelect.textContent = '';
   sections.forEach((section) => {
@@ -492,6 +507,7 @@ function fillSectionSelect() {
     sectionSelect.appendChild(option);
   });
 }
+
 function openEditor(mode, targetId = null) {
   state.editor = { mode, id: targetId };
   editorBlock.classList.add('open');
@@ -527,6 +543,29 @@ function currentTargetForEdit() {
   if (state.view === 'section') return nodeById(state.activeSectionId);
   return null;
 }
+function deleteCurrent() {
+  const target = currentTargetForEdit();
+  if (!target) return;
+  const isItem = target.type === 'item';
+  const title = target.title;
+  const message = isItem
+    ? `Удалить запись «${title}»?`
+    : `Удалить раздел «${title}» и все его записи внутри?`;
+  if (!window.confirm(message)) return;
+  if (isItem) {
+    items = items.filter((item) => item.id !== target.id);
+    state.selectedId = target.sectionId;
+  } else {
+    sections = sections.filter((section) => section.id !== target.sectionId);
+    items = items.filter((item) => item.sectionId !== target.sectionId);
+    state.view = 'home';
+    state.activeSectionId = null;
+    state.selectedId = null;
+  }
+  closeEditor();
+  saveData();
+  rebuild();
+}
 
 homeButton.addEventListener('click', () => {
   state.view = 'home';
@@ -543,6 +582,7 @@ editButton.addEventListener('click', () => {
   if (!target) return;
   openEditor(target.type === 'item' ? 'edit-item' : 'edit-section', target.id);
 });
+deleteButton.addEventListener('click', deleteCurrent);
 closeEditorButton.addEventListener('click', closeEditor);
 tagsInput.addEventListener('input', renderTagSuggestions);
 
@@ -596,7 +636,7 @@ canvas.addEventListener('mousemove', (event) => {
   canvas.style.cursor = node ? 'pointer' : 'default';
 });
 canvas.addEventListener('mouseleave', () => { state.hoveredId = null; dragged = null; renderPanel(); });
-canvas.addEventListener('mousedown', (event) => { dragged = hitNode(canvasPoint(event)); });
+canvas.addEventListener('mousedown', (event) => { dragged = hitNode(canvasPoint(event)); didMove = false; });
 window.addEventListener('mousemove', (event) => {
   if (!dragged) return;
   const point = canvasPoint(event);
@@ -604,9 +644,13 @@ window.addEventListener('mousemove', (event) => {
   dragged.y = point.y;
   dragged.vx = 0;
   dragged.vy = 0;
+  didMove = true;
 });
 window.addEventListener('mouseup', () => { dragged = null; });
-canvas.addEventListener('click', (event) => selectNode(hitNode(canvasPoint(event))));
+canvas.addEventListener('click', (event) => {
+  if (didMove) { didMove = false; return; }
+  selectNode(hitNode(canvasPoint(event)));
+});
 window.addEventListener('resize', () => { resize(); rebuild(); });
 
 loadData();
