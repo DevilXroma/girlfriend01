@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=0300" />
+  <link rel="stylesheet" href="style.css?v=0301" />
   <style>
     @media (max-width: 980px) {
       .canvas-box { touch-action: pan-y !important; }
@@ -94,7 +94,33 @@
     </section>
   </main>
 
-  <script src="data.js?v=0300"></script>
-  <script src="script.js?v=0300"></script>
+  <script src="data.js?v=0301"></script>
+  <script src="script.js?v=0301"></script>
+  <script>
+    (function () {
+      function applyKnownFact() {
+        if (typeof items === 'undefined' || !Array.isArray(items)) return;
+        var mom = items.find(function (item) { return item.id === 'family-mom'; }) ||
+          items.find(function (item) { return item.sectionId === 'family' && item.title === 'Мама'; });
+        if (!mom) {
+          mom = {
+            id: 'family-mom',
+            sectionId: 'family',
+            title: 'Лариса Грайровна',
+            comment: 'Мама. Имя и отчество: Лариса Грайровна. Остальное можно уточнить позже.',
+            tags: ['родные', 'мама', 'важное', 'уточнить']
+          };
+          items.push(mom);
+        } else {
+          mom.title = 'Лариса Грайровна';
+          mom.comment = 'Мама. Имя и отчество: Лариса Грайровна. Остальное можно уточнить позже.';
+          mom.tags = Array.from(new Set([...(mom.tags || []), 'родные', 'мама', 'важное', 'уточнить']));
+        }
+        if (typeof saveData === 'function') saveData();
+        if (typeof rebuild === 'function') rebuild();
+      }
+      setTimeout(applyKnownFact, 0);
+    })();
+  </script>
 </body>
 </html>
