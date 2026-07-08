@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#160d25" />
+  <title>Tag Cloud Notes</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="app">
+    <section class="hero glass">
+      <div class="hero-top">
+        <span class="badge">beta</span>
+        <span class="muted">mobile friendly</span>
+      </div>
+      <h1>Облако важных мелочей</h1>
+      <p>Мини-сайт для заметок, тегов, дат, идей, мест и маленьких деталей, которые хочется не забывать.</p>
+      <div class="stats" id="stats"></div>
+    </section>
+
+    <section class="glass controls">
+      <input id="search" type="search" placeholder="Поиск: подарок, дата, место, идея..." />
+      <div class="filters" id="filters"></div>
+    </section>
+
+    <section class="glass cloud-section">
+      <div class="section-title">
+        <div>
+          <h2>Облако тегов</h2>
+          <p>Нажми на тег, чтобы отфильтровать карточки.</p>
+        </div>
+        <button id="reset">сброс</button>
+      </div>
+      <div class="cloud" id="cloud"></div>
+    </section>
+
+    <section class="cards" id="cards"></section>
+  </main>
+
+  <script src="data.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
