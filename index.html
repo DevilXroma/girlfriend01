@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#090814" />
-  <title>Паутина важных мелочей</title>
+  <title>Паутина данных</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
@@ -17,43 +17,67 @@
 
   <main class="layout">
     <header class="hero">
-      <div class="eyebrow">
-        <span>memory web</span>
-        <span>prototype</span>
-      </div>
-      <h1>Паутина важных мелочей</h1>
-      <p>Теги здесь живут как созвездие: точки связаны общими заметками, а при наведении остаётся только нужный смысловой след.</p>
+      <div class="eyebrow"><span>memory web</span><span>editable prototype</span></div>
+      <h1>Паутина данных</h1>
+      <p>Главные узлы — это разделы. Вокруг них живут конкретные точки: идеи подарков, люди, поездки, даты, места и любые новые записи.</p>
     </header>
 
-    <section class="web-shell">
-      <div class="web-card">
+    <section class="workspace">
+      <section class="web-card">
         <div class="web-toolbar">
           <div>
-            <h2>Облако-созвездие</h2>
-            <p>Наведи курсор или нажми на точку. На телефоне — тап.</p>
+            <h2>Карта связей</h2>
+            <p>Большие точки — разделы. Маленькие — записи внутри них. Наведи, нажми или перетаскивай.</p>
           </div>
-          <button class="soft-button" id="resetView" type="button">сбросить фокус</button>
+          <div class="toolbar-actions">
+            <button id="resetView" type="button">сброс</button>
+            <button id="fitView" type="button">разнести</button>
+          </div>
         </div>
         <div class="canvas-wrap" id="canvasWrap">
-          <canvas id="tagCanvas" aria-label="Интерактивная паутина тегов"></canvas>
-          <div class="hint">drag / hover / tap</div>
+          <canvas id="tagCanvas" aria-label="Интерактивная паутина данных"></canvas>
+          <div class="hint">hover / tap / drag</div>
         </div>
-      </div>
+      </section>
 
-      <aside class="info-card" id="infoCard">
-        <div class="info-kicker">выбранный узел</div>
-        <h2 id="infoTitle">Наведи на тег</h2>
-        <p id="infoText">Связанные точки подсветятся, остальные приглушатся. Здесь появится описание тега и связанные заметки.</p>
-        <div class="meta-grid" id="infoMeta"></div>
-        <div class="related" id="relatedTags"></div>
+      <aside class="side-column">
+        <section class="info-card" id="infoCard">
+          <div class="info-kicker">фокус</div>
+          <h2 id="infoTitle">Выбери точку</h2>
+          <p id="infoText">При выборе раздела появятся его вложенные точки. При выборе записи — комментарий, теги и связи.</p>
+          <div class="meta-grid" id="infoMeta"></div>
+          <div class="related" id="relatedTags"></div>
+        </section>
+
+        <section class="editor-card">
+          <div class="editor-head">
+            <h2>Добавить точку</h2>
+            <p>Данные сохраняются в этом браузере. Для прототипа этого достаточно.</p>
+          </div>
+          <form id="addForm" class="add-form">
+            <label>Раздел
+              <select id="sectionSelect"></select>
+            </label>
+            <label class="new-section-row">Новый раздел
+              <input id="newSectionInput" type="text" placeholder="например: Еда" />
+            </label>
+            <label>Название точки
+              <input id="itemTitle" type="text" placeholder="например: Серёжки / Дилижан / Анна" required />
+            </label>
+            <label>Комментарий
+              <textarea id="itemText" rows="3" placeholder="Что важно помнить об этой точке"></textarea>
+            </label>
+            <label>Теги через запятую
+              <input id="itemTags" type="text" placeholder="уют, подарок, горы" />
+            </label>
+            <button type="submit">добавить в паутину</button>
+          </form>
+        </section>
       </aside>
     </section>
 
     <section class="panel-row">
-      <label class="search-panel">
-        <span>Поиск по заметкам</span>
-        <input id="searchInput" type="search" placeholder="например: горы, подарок, дата, место..." autocomplete="off" />
-      </label>
+      <label class="search-panel"><span>Поиск</span><input id="searchInput" type="search" placeholder="родные, подарок, поездка, дата..." autocomplete="off" /></label>
       <div class="mini-stats" id="miniStats"></div>
     </section>
 
