@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=0203" />
+  <link rel="stylesheet" href="style.css?v=0204" />
   <style>
     @media (max-width: 980px) {
       .canvas-box { touch-action: pan-y !important; }
@@ -93,18 +93,7 @@
     </section>
   </main>
 
-  <script src="data.js?v=0203"></script>
-  <script src="script.js?v=0203"></script>
-  <script>
-    (function () {
-      var canvas = document.getElementById('mapCanvas');
-      if (!canvas) return;
-      canvas.addEventListener('touchstart', function (event) {
-        if (window.matchMedia('(max-width: 980px)').matches) {
-          event.stopImmediatePropagation();
-        }
-      }, { capture: true, passive: true });
-    })();
-  </script>
+  <script src="data.js?v=0204"></script>
+  <script src="script.js?v=0204"></script>
 </body>
 </html>
